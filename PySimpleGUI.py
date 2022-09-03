@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-version = __version__ = "4.60.3.76 Unreleased"
+version = __version__ = "4.60.3.85 Unreleased"
 
 _change_log = """
     Changelog since 4.60.0 released to PyPI on 8-May-2022
@@ -198,7 +198,32 @@ _change_log = """
     4.60.3.76
         Changed the _this_elements_window_closed to use a flag "quick_check" for cheking is the window is closed.  Found that calling tkinter.update takes over 500ms sometimes!
             For appllications that call update frequently, this caused a catestrophic slowdown for complex windows.
-    
+    4.60.3.77
+        New Window method - get_scaling - gets the scaling value from tkinter.  Returns DEFAULT_SCALING if error.
+    4.60.3.78
+        Custom Titlebar - Support added to Window.minimize, Window.maximize, and Window.normal
+    4.60.3.79
+        Fix for Mulitline showing constant error messages after a Window is closed. 
+        Fix for correctly restoring stdout, stderr after they've been rerouted. THIS CODE IS NOT YET COMPLETE! Shooting for this weekend to get it done!
+        Image element - more speicific with tkinter when chaning to a new image so that pypy would stop crashing due to garbage collect not running. 
+            This change didn't fix the pypy problem but it also didn't hurt the code to have it
+    4.60.3.80
+        Quick and dirty addition of Alt-shortcuts for Buttons (like exists for Menus)
+            For backward compatablity, must be enabled using set_options with use_button_shortcuts=True
+        Fixed docstring errors in set_options docstring
+    4.60.3.81
+        Completed restoration of stdout & stderr
+            If an Output Element is used or a Multline element to reroute stdout and/or stderr, then this hasn't worked quite right in the past
+            Hopefuly now, it does.  A LIFO list (stack) is used to keep track of the current output device and is scrubbed for closed windows and restored if one is closed
+    4.60.3.82
+        Addition of Style Names for horizaontal and vertical ttk scrollbars - hsb_style_name and vsb_style_name so that scrollbar colors can be changed in user code
+    4.60.3.83
+        Output element - now automatically rereoutes cprint to here as well. Assumption is that you want stuff to go here without
+            needing to specify each thing.  If want more control, then use the Multline directly
+    4.60.3.84
+        Output element - updated docstring
+    4.60.3.85
+        Combo Element - new parameter enable_per_char_events.  When True will get an event when individual characters are entered.
     """
 
 __version__ = version.split()[0]  # For PEP 396 and PEP 345
@@ -329,7 +354,6 @@ port = 'PySimpleGUI'
 
     "Thank you" has fueled this project. I'm incredibly grateful to have users that are in turn grateful. It's a feedback loop of gratitude. What a fantastic thing!
 """
-
 # all of the tkinter involved imports
 import tkinter as tk
 from tkinter import filedialog
@@ -630,6 +654,7 @@ DEFAULT_ALPHA_CHANNEL = 1.0
 DEFAULT_HIDE_WINDOW_WHEN_CREATING = True
 TOOLTIP_BACKGROUND_COLOR = "#ffffe0"
 TOOLTIP_FONT = None
+DEFAULT_USE_BUTTON_SHORTCUTS = False
 #################### COLOR STUFF ####################
 BLUES = ("#082567", "#0A37A3", "#00345B")
 PURPLES = ("#480656", "#4F2398", "#380474")
@@ -1246,6 +1271,12 @@ class Element():
         # self.pad_used = (0, 0)  # the amount of pad used when was inserted into the layout
         self._popup_menu_location = (None, None)
         self.pack_settings = None
+        self.vsb_style_name = None           # ttk style name used for the verical scrollbar if one is attached to element
+        self.hsb_style_name = None           # ttk style name used for the horizontal scrollbar if one is attached to element
+        self.vsb_style = None                # The ttk style used for the vertical scrollbar if one is attached to element
+        self.hsb_style = None                # The ttk style used for the horizontal scrollbar if one is attached to element
+        self.hsb = None                      # The horizontal scrollbar if one is attached to element
+        self.vsb = None                      # The vertical scrollbar if one is attached to element
         ## TTK Scrollbar Settings
         self.ttk_part_overrides = TTKPartOverrides(sbar_trough_color=sbar_trough_color, sbar_background_color=sbar_background_color, sbar_arrow_color=sbar_arrow_color, sbar_width=sbar_width, sbar_arrow_width=sbar_arrow_width, sbar_frame_color=sbar_frame_color, sbar_relief=sbar_relief)
 
@@ -1475,48 +1506,11 @@ class Element():
 
         """
         # If this is a minimize button for a custom titlebar, then minimize the window
-        if self.Key == TITLEBAR_MINIMIZE_KEY:
-            if running_linux():
-                self.ParentForm.TKroot.wm_attributes("-type", "normal")
-                # self.ParentForm.TKroot.state('icon')
-                # return
-                # self.ParentForm.maximize()
-                self.ParentForm.TKroot.wm_overrideredirect(False)
-                # self.ParentForm.minimize()
-                # self.ParentForm.TKroot.wm_overrideredirect(False)
-                self.ParentForm.TKroot.iconify()
-                # self._skip_first_restore_callback = True
-                self.ParentForm.TKroot.bind('<Button-1>', self._titlebar_restore)
-            else:
-                self.ParentForm.TKroot.wm_overrideredirect(False)
-                self.ParentForm.Minimize()
-                self.ParentForm.TKroot.bind('<Expose>', self._titlebar_restore)
-        elif self.Key == TITLEBAR_MAXIMIZE_KEY:
-            if self.ParentForm.maximized:
-                self.ParentForm.normal()
-            else:
-                self.ParentForm.maximize()
-        elif self.Key == TITLEBAR_CLOSE_KEY:
-            self.ParentForm._OnClosingCallback()
-        else:
-            self._generic_callback_handler(self.DisplayText)
+        if self.Key in (TITLEBAR_MINIMIZE_KEY, TITLEBAR_MAXIMIZE_KEY, TITLEBAR_CLOSE_KEY):
+            self.ParentForm._custom_titlebar_callback(self.Key)
+        self._generic_callback_handler(self.DisplayText)
         return
 
-    def _titlebar_restore(self, event):
-        if running_linux():
-            # if self._skip_first_restore_callback:
-            #     self._skip_first_restore_callback = False
-            #     return
-            self.ParentForm.TKroot.unbind('<Button-1>')
-            self.ParentForm.TKroot.deiconify()
-
-            # self.ParentForm.TKroot.wm_overrideredirect(True)
-            self.ParentForm.TKroot.wm_attributes("-type", 'dock')
-
-        else:
-            self.ParentForm.TKroot.unbind('<Expose>')
-            self.ParentForm.TKroot.wm_overrideredirect(True)
-        self.ParentForm.normal()
 
     def _ReturnKeyHandler(self, event):
         """
@@ -2311,7 +2305,7 @@ class Combo(Element):
     ComboBox Element - A combination of a single-line input and a drop-down menu. User can type in their own value or choose from list.
     """
 
-    def __init__(self, values, default_value=None, size=(None, None), s=(None, None), auto_size_text=None, background_color=None, text_color=None, button_background_color=None, button_arrow_color=None, bind_return_key=False, change_submits=False, enable_events=False, disabled=False, key=None, k=None, pad=None, p=None, expand_x=False, expand_y=False, tooltip=None, readonly=False, font=None, visible=True, metadata=None):
+    def __init__(self, values, default_value=None, size=(None, None), s=(None, None), auto_size_text=None, background_color=None, text_color=None, button_background_color=None, button_arrow_color=None, bind_return_key=False, change_submits=False, enable_events=False, enable_per_char_events=None, disabled=False, key=None, k=None, pad=None, p=None, expand_x=False, expand_y=False, tooltip=None, readonly=False, font=None, visible=True, metadata=None):
         """
         :param values:                  values to choose. While displayed as text, the items returned are what the caller supplied, not text
         :type values:                   List[Any] or Tuple[Any]
@@ -2337,6 +2331,8 @@ class Combo(Element):
         :type change_submits:           (bool)
         :param enable_events:           Turns on the element specific events. Combo event is when a choice is made
         :type enable_events:            (bool)
+        :param enable_per_char_events:  Enables generation of events for every character that's input. This is like the Input element's events
+        :type enable_per_char_events:   (bool)
         :param disabled:                set disable state for element
         :type disabled:                 (bool)
         :param key:                     Used with window.find_element and with return values to uniquely identify this element
@@ -2386,7 +2382,7 @@ class Combo(Element):
             self.button_arrow_color = theme_button_color()[0]
         else:
             self.button_arrow_color = button_arrow_color
-
+        self.enable_per_char_events = enable_per_char_events
 
         super().__init__(ELEM_TYPE_INPUT_COMBO, size=sz, auto_size_text=auto_size_text, background_color=bg,
                          text_color=fg, key=key, pad=pad, tooltip=tooltip, font=font or DEFAULT_FONT, visible=visible, metadata=metadata)
@@ -3650,8 +3646,6 @@ class Multiline(Element):
         self.WriteOnly = write_only
         self.AutoRefresh = auto_refresh
         key = key if key is not None else k
-        self.previous_stdout = None
-        self.previous_stderr = None
         self.reroute_cprint = reroute_cprint
         self.echo_stdout_stderr = echo_stdout_stderr
         self.Justification = 'left' if justification is None else justification
@@ -3663,10 +3657,6 @@ class Multiline(Element):
         self.wrap_lines = wrap_lines
         self.reroute_stdout = reroute_stdout
         self.reroute_stderr = reroute_stderr
-        # if reroute_stdout:
-        #     self.reroute_stdout_to_here()
-        # if reroute_stderr:
-        #     self.reroute_stderr_to_here()
         self.no_scrollbar = no_scrollbar
         self.hscrollbar = None      # The horizontal scrollbar
         sz = size if size != (None, None) else s
@@ -3717,7 +3707,7 @@ class Multiline(Element):
             return
 
         if self._this_elements_window_closed():
-            _error_popup_with_traceback('Error in Multiline.update - The window was closed')
+            # _error_popup_with_traceback('Error in Multiline.update - The window was closed')
             return
 
 
@@ -3881,31 +3871,32 @@ class Multiline(Element):
         """
         Sends stdout (prints) to this element
         """
-        self.previous_stdout = sys.stdout
+        # if nothing on the stack, then need to save the very first stdout
+        if len(Window._rerouted_stdout_stack) == 0:
+            Window._original_stdout = sys.stdout
+        Window._rerouted_stdout_stack.insert(0, (self.ParentForm, self))
         sys.stdout = self
 
     def reroute_stderr_to_here(self):
         """
         Sends stderr to this element
         """
-        self.previous_stderr = sys.stderr
+        if len(Window._rerouted_stderr_stack) == 0:
+            Window._original_stderr = sys.stderr
+        Window._rerouted_stderr_stack.insert(0, (self.ParentForm, self))
         sys.stderr = self
 
     def restore_stdout(self):
         """
         Restore a previously re-reouted stdout back to the original destination
         """
-        if self.previous_stdout:
-            sys.stdout = self.previous_stdout
-            self.previous_stdout = None  # indicate no longer routed here
+        Window._restore_stdout()
 
     def restore_stderr(self):
         """
         Restore a previously re-reouted stderr back to the original destination
         """
-        if self.previous_stderr:
-            sys.stderr = self.previous_stderr
-            self.previous_stderr = None  # indicate no longer routed here
+        Window._restore_stderr()
 
     def write(self, txt):
         """
@@ -3916,8 +3907,12 @@ class Multiline(Element):
         """
         try:
             self.update(txt, append=True)
+            # if need to echo, then send the same text to the destinatoin that isn't thesame as this one
             if self.echo_stdout_stderr:
-                self.previous_stdout.write(txt)
+                if sys.stdout != self:
+                    sys.stdout.write(txt)
+                elif sys.stderr != self:
+                    sys.stderr.write(txt)
         except:
             pass
 
@@ -3926,25 +3921,22 @@ class Multiline(Element):
         Flush parameter was passed into a print statement.
         For now doing nothing.  Not sure what action should be taken to ensure a flush happens regardless.
         """
-        try:
-            self.previous_stdout.flush()
-        except:
-            pass
+        # try:
+        #     self.previous_stdout.flush()
+        # except:
+        #     pass
+        return
 
     def __del__(self):
         """
-        If this Widget is deleted, be sure and restore the old stdout, stderr
+        AT ONE TIME --- If this Widget is deleted, be sure and restore the old stdout, stderr
+        Now the restore is done differently. Do not want to RELY on Python to call this method
+        in order for stdout and stderr to be restored.  Instead explicit restores are called.
+
         """
-        # These trys are here because found that if the init fails, then
-        # the variables holding the old stdout won't exist and will get an error
-        try:
-            self.restore_stdout()
-        except Exception as e:
-            pass
-        try:
-            self.restore_stderr()
-        except:
-            pass
+
+        return
+
 
     Get = get
     Update = update
@@ -4527,110 +4519,6 @@ class TKProgressBar():
                 return False
         return True
 
-#
-# # ---------------------------------------------------------------------- #
-# #                           TKOutput                                     #
-# #   New Type of TK Widget that's a Text Widget in disguise               #
-# #       Note that it's inherited from the TKFrame class so that the      #
-# #       Scroll bar will span the length of the frame                     #
-# # ---------------------------------------------------------------------- #
-# class TKOutput(tk.Frame):
-#     """
-#     tkinter style class. Inherits Frame class from tkinter. Adds a tk.Text and a scrollbar together.
-#     Note - This is NOT a user controlled class. Users should NOT be directly using it unless making an extention
-#     to PySimpleGUI by directly manipulating tkinter.
-#     """
-#
-#     def __init__(self, parent, width, height, bd, background_color=None, text_color=None, echo_stdout_stderr=False, font=None, pad=None):
-#         """
-#         :param parent:             The "Root" that the Widget will be in
-#         :type parent:              tk.Tk | tk.Toplevel
-#         :param width:              Width in characters
-#         :type width:               (int)
-#         :param height:             height in rows
-#         :type height:              (int)
-#         :param bd:                 Border Depth.  How many pixels of border to show
-#         :type bd:                  (int)
-#         :param background_color:   color of background
-#         :type background_color:    (str)
-#         :param text_color:         color of the text
-#         :type text_color:          (str)
-#         :param echo_stdout_stderr: If True then output to stdout will be output to this element AND also to the normal console location
-#         :type echo_stdout_stderr:  (bool)
-#         :param font:               specifies the  font family, size, etc. Tuple or Single string format 'name size styles'. Styles: italic * roman bold normal underline overstrike
-#         :type font:                (str or (str, int[, str]) or None)
-#         :param pad:                Amount of padding to put around element in pixels (left/right, top/bottom) or ((left, right), (top, bottom)) or an int. If an int, then it's converted into a tuple (int, int)
-#         :type pad:                 (int, int) or ((int, int),(int,int)) or (int,(int,int)) or  ((int, int),int) | int
-#         """
-#         self.frame = tk.Frame(parent)
-#         tk.Frame.__init__(self, self.frame)
-#         self.output = tk.Text(self.frame, width=width, height=height, bd=bd, font=font)
-#         if background_color and background_color != COLOR_SYSTEM_DEFAULT:
-#             self.output.configure(background=background_color)
-#             self.frame.configure(background=background_color)
-#         if text_color and text_color != COLOR_SYSTEM_DEFAULT:
-#             self.output.configure(fg=text_color)
-#             self.output.configure(insertbackground=text_color)
-#         self.vsb = tk.Scrollbar(self.frame, orient="vertical", command=self.output.yview)
-#         self.output.configure(yscrollcommand=self.vsb.set)
-#         self.output.pack(side="left", fill="both", expand=True)
-#         self.vsb.pack(side="left", fill="y", expand=False)
-#         self.frame.pack(side="left", padx=pad[0], pady=pad[1], expand=True, fill='y')
-#         self.previous_stdout = sys.stdout
-#         self.previous_stderr = sys.stderr
-#         self.parent = parent
-#         self.echo_stdout_stderr = echo_stdout_stderr
-#
-#         sys.stdout = self
-#         sys.stderr = self
-#         self.pack()
-#
-#     def write(self, txt):
-#         """
-#         Called by Python (not tkinter?) when stdout or stderr wants to write
-#         Refreshes the window after the write so that the change is immediately displayed
-#
-#         :param txt: text of output
-#         :type txt:  (str)
-#         """
-#         try:
-#             self.output.insert(tk.END, str(txt))
-#             self.output.see(tk.END)
-#             self.parent.update()
-#         except:
-#             pass
-#
-#         try:
-#             if self.echo_stdout_stderr:
-#                 self.previous_stdout.write(txt)
-#         except:
-#             pass
-#
-#     def Close(self):
-#         """
-#         Called when wanting to restore the old stdout/stderr
-#         """
-#         sys.stdout = self.previous_stdout
-#         sys.stderr = self.previous_stderr
-#
-#     def flush(self):
-#         """
-#         Flush parameter was passed into a print statement.
-#         For now doing nothing.  Not sure what action should be taken to ensure a flush happens regardless.
-#         """
-#         try:
-#             if self.echo_stdout_stderr:
-#                 self.previous_stdout.flush()
-#         except:
-#             pass
-#
-#     def __del__(self):
-#         """
-#         If this Widget is deleted, be sure and restore the old stdout, stderr
-#         """
-#         sys.stdout = self.previous_stdout
-#         sys.stderr = self.previous_stderr
-
 
 # ---------------------------------------------------------------------- #
 #                           Output                                       #
@@ -4638,19 +4526,19 @@ class TKProgressBar():
 # ---------------------------------------------------------------------- #
 class Output(Multiline):
     """
-    ** NOTE - It's recommended to use Multiline Element instead **
+    Output Element - a multi-lined text area to where stdout, stderr, cprint are rerouted.
 
-    Output Element - a multi-lined text area where stdout and stderr are re-routed to.
+    The Output Element is now based on the Multiline Element.  When you make an Output Element, you're
+    creating a Multiline Element with some specific settings set:
+        auto_refresh = True
+        auto_scroll = True
+        reroute_stdout = True
+        reroute_stderr = True
+        reroute_cprint = True
+        write_only = True
 
-    The Multiline Element is the superior and recommended method for showing the output of stdout.
-    The Multiline Element has been added to significantly while the Output element has not.
-    If you choose to use a Multiline element to replace an Output element, be sure an turn on the write_only paramter in the Multline
-
-    Of course, Output Element continues to operate and be backwards compatible, but you're missing out on
-    features such as routing the cprint output to the element.
-
-    In Apr 2022, the Output Element was switched to be a subclass of the Multiline so that more code will be in common. Nowever
-    you will not get all of the parms unless you switch to the Multline Specifically
+    If you choose to use a Multiline element to replace an Output element, be sure an turn on the write_only paramter in the Multiline
+    so that an item is not included in the values dictionary on every window.read call
     """
 
     def __init__(self, size=(None, None), s=(None, None), background_color=None, text_color=None, pad=None, p=None, echo_stdout_stderr=False, font=None, tooltip=None,
@@ -4710,104 +4598,8 @@ class Output(Multiline):
         """
 
 
-        # self._TKOut = self.Widget = None  # type: TKOutput
-        # bg = background_color if background_color else DEFAULT_INPUT_ELEMENTS_COLOR
-        # fg = text_color if text_color is not None else DEFAULT_INPUT_TEXT_COLOR
-        # self.RightClickMenu = right_click_menu
-        # key = key if key is not None else k
-        # self.echo_stdout_stderr = echo_stdout_stderr
-        # sz = size if size != (None, None) else s
-        # pad = pad if pad is not None else p
-        # self.expand_x = expand_x
-        # self.expand_y = expand_y
+        super().__init__(size=size, s=s, background_color=background_color, text_color=text_color, pad=pad, p=p, echo_stdout_stderr=echo_stdout_stderr, font=font, tooltip=tooltip, wrap_lines=wrap_lines, horizontal_scroll=horizontal_scroll, key=key, k=k, right_click_menu=right_click_menu, write_only=True, reroute_stdout=True, reroute_stderr=True, reroute_cprint=True, autoscroll=True, auto_refresh=True, expand_x=expand_x, expand_y=expand_y, visible=visible, metadata=metadata, sbar_trough_color=sbar_trough_color, sbar_background_color=sbar_background_color, sbar_arrow_color=sbar_arrow_color, sbar_width=sbar_width, sbar_arrow_width=sbar_arrow_width, sbar_frame_color=sbar_frame_color, sbar_relief=sbar_relief)
 
-        super().__init__(size=size, s=s, background_color=background_color, text_color=text_color, pad=pad, p=p, echo_stdout_stderr=echo_stdout_stderr, font=font, tooltip=tooltip, wrap_lines=wrap_lines, horizontal_scroll=horizontal_scroll,
-                 key=key, k=k, right_click_menu=right_click_menu, write_only=True, reroute_stdout=True, reroute_stderr=True, autoscroll=True, auto_refresh=True, expand_x=expand_x, expand_y=expand_y, visible=visible, metadata=metadata,
-                         sbar_trough_color=sbar_trough_color, sbar_background_color=sbar_background_color, sbar_arrow_color=sbar_arrow_color, sbar_width=sbar_width, sbar_arrow_width=sbar_arrow_width, sbar_frame_color=sbar_frame_color, sbar_relief=sbar_relief)
-    #
-    # @property
-    # def tk_out(self):
-    #     """
-    #     Returns the TKOutput object used to create the element
-    #
-    #     :return: The TKOutput object
-    #     :rtype:  (TKOutput)
-    #     """
-    #     if self._TKOut is None:
-    #         print('*** Did you forget to call Finalize()? Your code should look something like: ***')
-    #         print('*** form = sg.Window("My Form").Layout(layout).Finalize() ***')
-    #     return self._TKOut
-    #
-    # def update(self, value=None, visible=None):
-    #     """
-    #     Changes some of the settings for the Output Element. Must call `Window.Read` or `Window.Finalize` prior
-    #
-    #     Changes will not be visible in your window until you call window.read or window.refresh.
-    #
-    #     If you change visibility, your element may MOVE. If you want it to remain stationary, use the "layout helper"
-    #     function "pin" to ensure your element is "pinned" to that location in your layout so that it returns there
-    #     when made visible.
-    #
-    #     :param value:   string that will replace current contents of the output area
-    #     :type value:    (str)
-    #     :param visible: control visibility of element
-    #     :type visible:  (bool)
-    #     """
-    #     if not self._widget_was_created():  # if widget hasn't been created yet, then don't allow
-    #         return
-    #
-    #     if value is not None:
-    #         self._TKOut.output.delete('1.0', tk.END)
-    #         self._TKOut.output.insert(tk.END, value)
-    #     if visible is False:
-    #         self._pack_forget_save_settings(self._TKOut.frame)
-    #     elif visible is True:
-    #         self._pack_restore_settings(self._TKOut.frame)
-    #
-    #     if visible is not None:
-    #         self._visible = visible
-    #
-    # def get(self):
-    #     """
-    #     Returns the current contents of the output.  Similar to Get method other Elements
-    #     :return: the current value of the output
-    #     :rtype:  (str)
-    #     """
-    #     return self._TKOut.output.get(1.0, tk.END)
-    #
-    # def expand(self, expand_x=False, expand_y=False, expand_row=True):
-    #     """
-    #     Causes the Element to expand to fill available space in the X and Y directions.  Can specify which or both directions
-    #
-    #     :param expand_x: If True Element will expand in the Horizontal directions
-    #     :type expand_x:  (bool)
-    #     :param expand_y: If True Element will expand in the Vertical directions
-    #     :type expand_y:  (bool)
-    #     """
-    #
-    #     if expand_x and expand_y:
-    #         fill = tk.BOTH
-    #     elif expand_x:
-    #         fill = tk.X
-    #     elif expand_y:
-    #         fill = tk.Y
-    #     else:
-    #         return
-    #
-    #     self._TKOut.output.pack(expand=True, fill=fill)
-    #     self._TKOut.frame.pack(expand=True, fill=fill)
-    #     self.ParentRowFrame.pack(expand=expand_row, fill=fill)
-    #
-    # def __del__(self):
-    #     """
-    #     Delete this element. Normally Elements do not have their delete method specified, but for this one
-    #     it's important that the underlying TKOut object get deleted so that the stdout will get restored properly
-    #     """
-    #     self._TKOut.__del__()
-
-    # TKOut = tk_out
-    # Update = update
-    # Get = get
 
 
 # ---------------------------------------------------------------------- #
@@ -4973,6 +4765,13 @@ class Button(Element):
         #     self.UseTtkButtons = False              # if an image is to be displayed, then force the button to not be a TTK Button
         if key is None and k is None:
             _key = self.ButtonText
+            if DEFAULT_USE_BUTTON_SHORTCUTS is True:
+                pos = _key.find(MENU_SHORTCUT_CHARACTER)
+                if pos != -1:
+                    if pos < len(MENU_SHORTCUT_CHARACTER) or _key[pos - len(MENU_SHORTCUT_CHARACTER)] != "\\":
+                        _key = _key[:pos] + _key[pos + len(MENU_SHORTCUT_CHARACTER):]
+                    else:
+                        _key = _key.replace('\\'+MENU_SHORTCUT_CHARACTER, MENU_SHORTCUT_CHARACTER)
         else:
             _key = key if key is not None else k
         if highlight_colors is not None:
@@ -5263,7 +5062,18 @@ class Button(Element):
             # style_name = str(self.Key) + 'custombutton.TButton'
             button_style = ttk.Style()
         if text is not None:
-            self.TKButton.configure(text=text)
+            btext = text
+            if DEFAULT_USE_BUTTON_SHORTCUTS is True:
+                pos = btext.find(MENU_SHORTCUT_CHARACTER)
+                if pos != -1:
+                    if pos < len(MENU_SHORTCUT_CHARACTER) or btext[pos - len(MENU_SHORTCUT_CHARACTER)] != "\\":
+                        btext = btext[:pos] + btext[pos + len(MENU_SHORTCUT_CHARACTER):]
+                    else:
+                        btext = btext.replace('\\'+MENU_SHORTCUT_CHARACTER, MENU_SHORTCUT_CHARACTER)
+                        pos = -1
+                if pos != -1:
+                    self.TKButton.config(underline=pos)
+            self.TKButton.configure(text=btext)
             self.ButtonText = text
         if button_color != (None, None) and button_color != COLOR_SYSTEM_DEFAULT:
             bc = button_color_to_tuple(button_color, self.ButtonColor)
@@ -5909,6 +5719,9 @@ class Image(Element):
                 # return  # an error likely means the window has closed so exit
 
         if image is not None:
+            self.tktext_label.configure(image='')           # clear previous image
+            if self.tktext_label.image is not None:
+                del self.tktext_label.image
             if type(image) is not bytes:
                 width, height = size[0] if size[0] is not None else image.width(), size[1] if size[1] is not None else image.height()
             else:
@@ -5927,7 +5740,7 @@ class Image(Element):
         if filename is None and image is None and visible is None and size == (None, None):
             # Using a try because the image may have been previously deleted and don't want an error if that's happened
             try:
-                self.tktext_label.configure(width=1, height=1, bd=0)
+                self.tktext_label.configure(image='', width=1, height=1, bd=0)
                 self.tktext_label.image = None
             except:
                 pass
@@ -9742,6 +9555,11 @@ class Window:
     _counter_for_ttk_widgets = 0
     _floating_debug_window_build_needed = False
     _main_debug_window_build_needed = False
+    # rereouted stdout info. List of tuples (window, element, previous destination)
+    _rerouted_stdout_stack = []             # type: List[Tuple[Window, Element]]
+    _rerouted_stderr_stack = []             # type: List[Tuple[Window, Element]]
+    _original_stdout = None
+    _original_stderr = None
 
     def __init__(self, title, layout=None, default_element_size=None,
                  default_button_element_size=(None, None),
@@ -11075,8 +10893,12 @@ class Window:
         """
         if not self._is_window_created('tried Window.minimize'):
             return
-        self.TKroot.iconify()
+        if self.use_custom_titlebar is True:
+            self._custom_titlebar_minimize()
+        else:
+            self.TKroot.iconify()
         self.maximized = False
+
 
     def maximize(self):
         """
@@ -11101,14 +10923,17 @@ class Window:
         """
         if not self._is_window_created('tried Window.normal'):
             return
-        if self.TKroot.state() == 'iconic':
-            self.TKroot.deiconify()
+        if self.use_custom_titlebar:
+            self._custom_titlebar_restore()
         else:
-            if not running_linux():
-                self.TKroot.state('normal')
+            if self.TKroot.state() == 'iconic':
+                self.TKroot.deiconify()
             else:
-                self.TKroot.attributes('-fullscreen', False)
-        self.maximized = False
+                if not running_linux():
+                    self.TKroot.state('normal')
+                else:
+                    self.TKroot.attributes('-fullscreen', False)
+            self.maximized = False
 
 
     def _StartMoveUsingControlKey(self, event):
@@ -11329,6 +11154,7 @@ class Window:
         :parm without_event: if True, then do not cause an event to be generated, "silently" close the window
         :type without_event: (bool)
         """
+
         try:
             self.TKroot.update()
         except:
@@ -11347,6 +11173,7 @@ class Window:
         Closes window.  Users can safely call even if window has been destroyed.   Should always call when done with
         a window so that resources are properly freed up within your thread.
         """
+
         try:
             del Window._active_windows[self]  # will only be in the list if window was explicitly finalized
         except:
@@ -11376,6 +11203,11 @@ class Window:
         # Free up anything that was held in the layout and the root variables
         self.Rows = None
         self.TKroot = None
+
+        self._restore_stdout()
+        self._restore_stderr()
+
+
 
     def is_closed(self, quick_check=None):
         """
@@ -11429,6 +11261,8 @@ class Window:
                 self.LastButtonClicked = WINDOW_CLOSE_ATTEMPTED_EVENT
         if self.close_destroys_window:
             self.RootNeedsDestroying = True
+        self._restore_stdout()
+        self._restore_stderr()
 
     def disable(self):
         """
@@ -12193,6 +12027,118 @@ class Window:
         if key in self.key_dict:
             return True
         return False
+
+    def get_scaling(self):
+        """
+        Returns the current scaling value set for this window
+
+        :return:    Scaling according to tkinter. Returns DEFAULT_SCALING if error
+        :rtype:     float
+        """
+
+        if not self._is_window_created('Tried Window.set_scaling'):
+            return DEFAULT_SCALING
+        try:
+            scaling = self.TKroot.tk.call('tk', 'scaling')
+        except Exception as e:
+            if not SUPPRESS_ERROR_POPUPS:
+                _error_popup_with_traceback('Window.get_scaling() - tkinter reported error', e)
+            scaling = DEFAULT_SCALING
+
+        return scaling
+
+
+    def _custom_titlebar_restore_callback(self, event):
+        self._custom_titlebar_restore()
+
+
+    def _custom_titlebar_restore(self):
+        if running_linux():
+            # if self._skip_first_restore_callback:
+            #     self._skip_first_restore_callback = False
+            #     return
+            self.TKroot.unbind('<Button-1>')
+            self.TKroot.deiconify()
+
+            # self.ParentForm.TKroot.wm_overrideredirect(True)
+            self.TKroot.wm_attributes("-type", 'dock')
+
+        else:
+            self.TKroot.unbind('<Expose>')
+            self.TKroot.wm_overrideredirect(True)
+        if self.TKroot.state() == 'iconic':
+            self.TKroot.deiconify()
+        else:
+            if not running_linux():
+                self.TKroot.state('normal')
+            else:
+                self.TKroot.attributes('-fullscreen', False)
+        self.maximized = False
+
+
+    def _custom_titlebar_minimize(self):
+        if running_linux():
+            self.TKroot.wm_attributes("-type", "normal")
+            # self.ParentForm.TKroot.state('icon')
+            # return
+            # self.ParentForm.maximize()
+            self.TKroot.wm_overrideredirect(False)
+            # self.ParentForm.minimize()
+            # self.ParentForm.TKroot.wm_overrideredirect(False)
+            self.TKroot.iconify()
+            # self._skip_first_restore_callback = True
+            self.TKroot.bind('<Button-1>', self._custom_titlebar_restore_callback)
+        else:
+            self.TKroot.wm_overrideredirect(False)
+            self.TKroot.iconify()
+            self.TKroot.bind('<Expose>', self._custom_titlebar_restore_callback)
+
+
+    def _custom_titlebar_callback(self, key):
+        """
+        One of the Custom Titlbar buttons was clicked
+        :param key:
+        :return:
+        """
+        if key == TITLEBAR_MINIMIZE_KEY:
+            self._custom_titlebar_minimize()
+        elif key == TITLEBAR_MAXIMIZE_KEY:
+            if self.maximized:
+                self.normal()
+            else:
+                self.maximize()
+        elif key == TITLEBAR_CLOSE_KEY:
+            self._OnClosingCallback()
+
+
+    @classmethod
+    def _restore_stdout(cls):
+        for item in cls._rerouted_stdout_stack:
+            (window, element) = item   # type: (Window, Element)
+            if not window.is_closed():
+                sys.stdout = element
+                break
+        cls._rerouted_stdout_stack = [item for item in cls._rerouted_stdout_stack if not item[0].is_closed()]
+        if len(cls._rerouted_stdout_stack) == 0 and cls._original_stdout is not None:
+            sys.stdout = cls._original_stdout
+        # print('Restored stdout... new stack:',  [item[0].Title for item in cls._rerouted_stdout_stack ])
+
+
+    @classmethod
+    def _restore_stderr(cls):
+        for item in cls._rerouted_stderr_stack:
+            (window, element) = item   # type: (Window, Element)
+            if not window.is_closed():
+                sys.stderr = element
+                break
+        cls._rerouted_stderr_stack = [item for item in cls._rerouted_stderr_stack if not item[0].is_closed()]
+        if len(cls._rerouted_stderr_stack) == 0 and cls._original_stderr is not None:
+            sys.stderr = cls._original_stderr
+        # print('Restored stderr... new stack:',  [item[0].Title for item in cls._rerouted_stderr_stack ])
+
+
+
+
 
     # def __enter__(self):
     #     """
@@ -15079,11 +15025,13 @@ def _make_ttk_scrollbar(element, orientation, window):
         # style_name_thumb = _make_ttk_style_name('.Vertical.TScrollbar.thumb', element)
         element.vsb_style = style
         element.vsb = ttk.Scrollbar(element.element_frame, orient=orient, command=element.Widget.yview, style=style_name)
+        element.vsb_style_name = style_name
     else:
         orient = 'horizontal'
         style_name = _make_ttk_style_name('.Horizontal.TScrollbar', element)
         element.hsb_style = style
         element.hsb = ttk.Scrollbar(element.element_frame, orient=orient, command=element.Widget.xview, style=style_name)
+        element.hsb_style_name = style_name
 
 
     # ------------------ Get the colors using heirarchy of element, window, options, settings ------------------
@@ -15647,8 +15595,18 @@ def PackFormIntoFrame(form, containing_frame, toplevel_form):
                     bc = DEFAULT_BUTTON_COLOR
 
                 bd = element.BorderWidth
-
+                pos = -1
+                if DEFAULT_USE_BUTTON_SHORTCUTS is True:
+                    pos = btext.find(MENU_SHORTCUT_CHARACTER)
+                    if pos != -1:
+                        if pos < len(MENU_SHORTCUT_CHARACTER) or btext[pos - len(MENU_SHORTCUT_CHARACTER)] != "\\":
+                            btext = btext[:pos] + btext[pos + len(MENU_SHORTCUT_CHARACTER):]
+                        else:
+                            btext = btext.replace('\\'+MENU_SHORTCUT_CHARACTER, MENU_SHORTCUT_CHARACTER)
+                            pos = -1
                 tkbutton = element.Widget = tk.Button(tk_row_frame, text=btext, width=width, height=height, justify=tk.CENTER, bd=bd, font=font)
+                if pos != -1:
+                    tkbutton.config(underline=pos)
                 try:
                     if btype != BUTTON_TYPE_REALTIME:
                         tkbutton.config( command=element.ButtonCallBack)
@@ -15766,6 +15724,15 @@ def PackFormIntoFrame(form, containing_frame, toplevel_form):
                 element.TKStringVar = stringvar
                 element.Location = (row_num, col_num)
                 btext = element.ButtonText
+                pos = -1
+                if DEFAULT_USE_BUTTON_SHORTCUTS is True:
+                    pos = btext.find(MENU_SHORTCUT_CHARACTER)
+                    if pos != -1:
+                        if pos < len(MENU_SHORTCUT_CHARACTER) or btext[pos - len(MENU_SHORTCUT_CHARACTER)] != "\\":
+                            btext = btext[:pos] + btext[pos + len(MENU_SHORTCUT_CHARACTER):]
+                        else:
+                            btext = btext.replace('\\'+MENU_SHORTCUT_CHARACTER, MENU_SHORTCUT_CHARACTER)
+                            pos = -1
                 btype = element.BType
                 if element.AutoSizeButton is not None:
                     auto_size = element.AutoSizeButton
@@ -15784,6 +15751,8 @@ def PackFormIntoFrame(form, containing_frame, toplevel_form):
                     bc = DEFAULT_BUTTON_COLOR
                 bd = element.BorderWidth
                 tkbutton = element.Widget = ttk.Button(tk_row_frame, text=btext, width=width)
+                if pos != -1:
+                    tkbutton.config(underline=pos)
                 if btype != BUTTON_TYPE_REALTIME:
                     tkbutton.config(command=element.ButtonCallBack)
                 else:
@@ -16111,6 +16080,8 @@ def PackFormIntoFrame(form, containing_frame, toplevel_form):
                     element.TKCombo.bind('<<ComboboxSelected>>', element._ComboboxSelectHandler)
                 if element.BindReturnKey:
                     element.TKCombo.bind('<Return>', element._ComboboxSelectHandler)
+                if element.enable_per_char_events:
+                    element.TKCombo.bind('<Key>', element._KeyboardHandler)
                 if element.Readonly:
                     element.TKCombo['state'] = 'readonly'
                 if element.Disabled is True:  # note overrides readonly if disabled
@@ -18447,7 +18418,7 @@ def set_options(icon=None, button_color=None, element_size=(None, None), button_
                 enable_mac_notitlebar_patch=None, use_custom_titlebar=None, titlebar_background_color=None, titlebar_text_color=None, titlebar_font=None,
                 titlebar_icon=None, user_settings_path=None, pysimplegui_settings_path=None, pysimplegui_settings_filename=None, keep_on_top=None, dpi_awareness=None, scaling=None, disable_modal_windows=None, force_modal_windows=None, tooltip_offset=(None, None),
                 sbar_trough_color=None, sbar_background_color=None, sbar_arrow_color=None, sbar_width=None, sbar_arrow_width=None, sbar_frame_color=None, sbar_relief=None, alpha_channel=None,
-                hide_window_when_creating=None):
+                hide_window_when_creating=None, use_button_shortcuts=None):
     """
     :param icon:                            Can be either a filename or Base64 value. For Windows if filename, it MUST be ICO format. For Linux, must NOT be ICO. Most portable is to use a Base64 of a PNG file. This works universally across all OS's
     :type icon:                             bytes | str
@@ -18575,10 +18546,12 @@ def set_options(icon=None, button_color=None, element_size=(None, None), button_
     :type sbar_frame_color:                 (str)
     :param sbar_relief:                     Scrollbar relief that will be used for the "thumb" of the scrollbar (the thing you grab that slides). Should be a constant that is defined at starting with "RELIEF_" - RELIEF_RAISED, RELIEF_SUNKEN, RELIEF_FLAT, RELIEF_RIDGE, RELIEF_GROOVE, RELIEF_SOLID
     :type sbar_relief:                      (str)
-    :param alpha_channel                    Default alpha channel to be used on all windows
-    :type alpha_channel                     (float)
-    :param hide_window_when_creating        If True then alpha will be set to 0 while a window is made and moved to location indicated
-    :type hide_window_when_creating         (bool)
+    :param alpha_channel:                   Default alpha channel to be used on all windows
+    :type alpha_channel:                    (float)
+    :param hide_window_when_creating:       If True then alpha will be set to 0 while a window is made and moved to location indicated
+    :type hide_window_when_creating:        (bool)
+    :param use_button_shortcuts:            If True then Shortcut Char will be used with Buttons
+    :type use_button_shortcuts:             (bool)
     :return:                                None
     :rtype:                                 None
     """
@@ -18641,6 +18614,7 @@ def set_options(icon=None, button_color=None, element_size=(None, None), button_
     global _pysimplegui_user_settings
     global ttk_part_overrides_from_options
     global DEFAULT_HIDE_WINDOW_WHEN_CREATING
+    global DEFAULT_USE_BUTTON_SHORTCUTS
     # global _my_windows
 
     if icon:
@@ -18853,6 +18827,8 @@ def set_options(icon=None, button_color=None, element_size=(None, None), button_
     if hide_window_when_creating is not None:
         DEFAULT_HIDE_WINDOW_WHEN_CREATING = hide_window_when_creating
 
+    if use_button_shortcuts is not None:
+        DEFAULT_USE_BUTTON_SHORTCUTS = use_button_shortcuts
     return True
 
 
@@ -25110,7 +25086,8 @@ def main_sdk_help():
                         [T(size=(80, 1), font='Courier 10 underline', k='-DOC LINK-', enable_events=True)]], pad=(0, 0), expand_x=True, expand_y=True, vertical_alignment='t')
     layout = [[button_col, mline_col]]
     layout += [[CBox('Summary Only', enable_events=True, k='-SUMMARY-'), CBox('Display Only PEP8 Functions', default=True, k='-PEP8-')]]
-    # layout += [[Button('Exit', size=(15, 1))]]
+    # layout = [[Column(layout, scrollable=True, p=0, expand_x=True, expand_y=True, vertical_alignment='t'), Sizegrip()]]
+    layout += [[Button('Exit', size=(15, 1)), Sizegrip()]]
 
     window = Window('SDK API Call Reference', layout, resizable=True, use_default_focus=False, keep_on_top=True, icon=EMOJI_BASE64_THINK, finalize=True, right_click_menu=MENU_RIGHT_CLICK_EDITME_EXIT)
     window['-DOC LINK-'].set_cursor('hand1')
@@ -25193,7 +25170,6 @@ def main_sdk_help():
     except Exception as e:
         _error_popup_with_traceback('Exception in SDK reference', e)
     window.close()
-
 
 #                     oo
 #
@@ -25491,16 +25467,15 @@ def main():
         elif event == 'Get Text':
             popup_scrolled('Returned:', popup_get_text('Enter some text', keep_on_top=True))
         elif event.startswith('-UDEMY-'):
-                webbrowser.open_new_tab(r'https://www.udemy.com/course/pysimplegui/?couponCode=F006AC77434776717B42')
+                webbrowser.open_new_tab(r'https://www.udemy.com/course/pysimplegui/?couponCode=346BC463A0F8759BEF1B')
         elif event.startswith('-SPONSOR-'):
             if webbrowser_available:
                 webbrowser.open_new_tab(r'https://www.paypal.me/pythongui')
         elif event == '-COFFEE-':
             if webbrowser_available:
-                # webbrowser.open_new_tab(r'https://udemy.com/PySimpleGUI')
                 webbrowser.open_new_tab(r'https://www.buymeacoffee.com/PySimpleGUI')
         elif event in  ('-EMOJI-HEARTS-', '-HEART-', '-PYTHON HEARTS-'):
-            popup_scrolled("Oh look!  It's a Udemy discount coupon!", 'F006AC77434776717B42',
+            popup_scrolled("Oh look!  It's a Udemy discount coupon!", '346BC463A0F8759BEF1B',
                            'A personal message from Mike -- thank you so very much for supporting PySimpleGUI!', title='Udemy Coupon', image=EMOJI_BASE64_MIKE, keep_on_top=True)
 
         elif event == 'Themes':
@@ -25661,4 +25636,4 @@ if __name__ == '__main__':
         exit(0)
     main()
     exit(0)
-#567068f650589bd23f1cff459b19da29ca120410c641aacbc1acc2e49891c795990e1431bf9038f9d39e622f9f801ec18e8cdc096a08a73b777dec1185e3a11596a3c82217cf842a04236903bd1852d2b1553fcf67c12095fd2d8ab589c8e264f314b2a02d36661d857729602ab0f66d47a36a8774d223d5cddc137b74ac1d31cb9342334d9cc9f74a7d6158896bacb9c9f8ae8da52f92ebb37e9bd3d76633e0a03b7732df0c4b940838b48e4a2bab6f62fc5fa72af8c5927e1d5896f5e2f9b4709fd934e3066831afcdb0b58c438847348afd3976505eaac0ae73f4f3bc7efd781ce9847f3911470a2d94491dd14c738311813899ca35d4416beef0ca9f9f2fafcc745c37468d5fc89ea154798162364a45e320acf0caa6d9432bec5a056aab626ca4fd8f033d5dbbeb11c0ea1da7ef61b29e82b29c6c3f9463eea8129c31dcc8b517b7f84d7211a06a1901b34df3a523adf2f1a267fb1bc7ec23e260e29e2326be969a02e0a20a715f1c54e0c6b1b52613733c524f2727815c8159b80f575a93082c78182f2e5c82206f97b8335cf85461a01971c3f3b8fc16bb64246735c0219266d08bf018e552aebbdd3b25dc93ceae3dc7d9ee4acf420351ab99a5994041f28f493d2e5fd8d920b09eee9f2796ebffbf67dfad0f0b6d8e1ba8417e6065dcdd47492525a0a3d05f7adf47e06c5e6fe8447754872be7ce1bcb78c4d0e3fe
+#4137380fb91599297f120658a5ff702002e15a5d5dacec6a7cd7e697eb7e31336f7000251eec25ac7d31fb40ca32df7eb5346295dfa17ae97dbb0985ab68737a73ba71d875a37c3b100da05effddd6acdd3a80ac0b0084549432099c2b5772350b0abc7edda8443269190e8dfda5ce49447d696bc730a5aaba618ac9dc0d08fb07f771d413913b6e332127270b43d462890319188aea4f1236c07ababa7d11239e12eb12112f17cef3332f1dede4140e13583b3612da1440d9c042541d3a45e95e66bc47d958e731f95a7fe9c2401abe303108135a20e01c92af8363ae3e252314014d1e5647af77561c193908fd04cc8dda38389b4fad8a1443b5fa0c6dbda1930001749e47d078865dd1b7c44cf25c8b51c56078027e447e15a8ff284709eafa7b6bf45e911da32a52ab7e4be986dced86a8dd99cafc29b8797ce0a316d2f96f72b52468a723371a515337a28b9c047330ddc0bb9f1e3c52d25d1be1147f0a1c487ac384d784ec3eb12fec3d5751efb5f4139c75cac4f4628cab41cdf3c955cd10598a4de4aa99452bc7f4072c87c39cde9e5d8ef44bc7e0723d106db0d314bc903b60f9794f7ef37f31546038933bd2a762fc9c5913f7bcf7eb84f6c6acdee52651963281bf9bb9c6ebe3059c3ba10429e262816f2776b0a62990ff62281363356aaa6efccec90e17e5cf576d4dbda92722a2f3157ecf95487f122e5f8107
