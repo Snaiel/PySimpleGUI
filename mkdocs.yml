@@ -4,5 +4,7 @@ theme:
     custom_dir: docs_modification/
 plugins:
   - search:
-        prebuild_index: true
+      prebuild_index: true
   
+dependencies:
+  - mkdocs==1.3.1
