@@ -7,6 +7,12 @@ into the readme.md file and the index.md file
 the exact path to the index.md file is
 
 readme_creator/output/index.md
+
+Intended workflow:
+    1. use `RUN_ME and START_HERE.py` to create the doc files
+    2. run `announcements.py` to inject announcements into `index.md`
+    3. move the output files into the `docs/` folder in the main PySimpleGUI repo
+    4. profit (or not)
 '''
 
 import requests, re
@@ -46,7 +52,7 @@ class Announcement:
     def get_formatted_date(self) -> str:
         return datetime.strftime(self.date_object, "%d %B, %Y")
 
-def get_announcements() -> list[Announcement]:
+def get_announcements() -> list:
     announcement_objects = []
 
     URL = "https://github.com/PySimpleGUI/PySimpleGUI/issues/142"
@@ -74,7 +80,7 @@ def get_announcements() -> list[Announcement]:
 
     return announcement_objects
 
-def inject_into_readme(announcements: list[Announcement]):
+def inject_into_readme(announcements: list):
     announcements_string = ""
 
     for i in announcements:
@@ -82,14 +88,14 @@ def inject_into_readme(announcements: list[Announcement]):
 
     re_announcements = re.compile(r"(?<=<!-- Announcements -->\s)[\s\S]*(?=<!-- Announcements -->)")
 
-    with open(README_PATH, 'r+') as readme_file:
+    with open(README_PATH, 'r+', encoding="utf-8") as readme_file:
         readme_content = readme_file.read()
         new_content = re.sub(re_announcements, announcements_string, readme_content)
         readme_file.truncate(0)
         readme_file.seek(0)
         readme_file.write(new_content)
 
-def insert_into_docs(announcements: list[Announcement]):
+def insert_into_docs(announcements: list):
     announcements_string = ""
 
     for i in announcements:
@@ -97,7 +103,7 @@ def insert_into_docs(announcements: list[Announcement]):
 
     announcements_string += "\n"
 
-    with open(INDEX_PATH, 'r+') as readme_file:
+    with open(INDEX_PATH, 'r+', encoding="utf-8") as readme_file:
         readme_content = readme_file.readlines()
 
         announcements_index = 0

@@ -17,14 +17,14 @@
 
 # Announcements
 <!-- Announcements -->
-### [(06 August, 2022 Eating Your Own Dog Food)](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1207243789)
-Eating your own dog food is a lesson I learned way back in the early days of my career. The more runtime you as a developer, team, or company can get on your own products the better.
+### [(27 August, 2022 Two User Screenshot Tabs)](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1229259737)
+At the moment, I've made 2 tabs that have the user screenshots from Issue 10.
 
-read the rest [here](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1207243789)
-### [(07 August, 2022 Still Committed....)](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1207383181)
-If you've been following this project, using PySimpleGUI since 2018, then you've likely noticed a "slow-down" in activities that are visible here on GitHub. I've mentioned a few times over the past weeks that this was and is happening.
+read the rest [here](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1229259737)
+### [(29 August, 2022 New Udemy Coupon Posted)](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1229594561)
+I'm really sorry that the Udemy coupon code expired about a week ago. I normally have an entry in my calendar to remind me to create a new one, but I missed adding it to my calendar when I made the coupon back in July.
 
-read the rest [here](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1207383181)
+read the rest [here](https://github.com/PySimpleGUI/PySimpleGUI/issues/142#issuecomment-1229594561)
 <!-- Announcements -->
 
 # The Project
