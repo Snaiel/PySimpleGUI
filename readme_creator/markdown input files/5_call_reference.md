@@ -25,9 +25,9 @@
                     <span style="font-weight: normal;">
                         apply coupon for discount: 
                     </span>
-                    4FD91A459D56B1029FF8
+                    D5570C66DBD8E42C7963
                 </div>
-                <button style="margin: 0 auto; display: block; width: 200px; height: 70px; border-radius: 14px; border: none; padding: 10px; font-size: 18px; background-color: #357296; color: white; cursor: pointer;" onclick="window.open('https://www.udemy.com/course/pysimplegui/?couponCode=4FD91A459D56B1029FF8','_blank');">
+                <button style="margin: 0 auto; display: block; width: 200px; height: 70px; border-radius: 14px; border: none; padding: 10px; font-size: 18px; background-color: #357296; color: white; cursor: pointer;" onclick="window.open('https://www.udemy.com/course/pysimplegui/?couponCode=D5570C66DBD8E42C7963','_blank');">
                     click here to visit course page
                 </button>
             </div>
@@ -3341,6 +3341,7 @@ Don't use these.  They are here in case you're searching for them.  Instead use 
 <!-- <+func.popup_auto_close+> -->
 <!-- <+func.popup_cancel+> -->
 <!-- <+func.popup_error+> -->
+<!-- <+func.popup_error_with_traceback+> -->
 <!-- <+func.popup_get_date+> -->
 <!-- <+func.popup_get_file+> -->
 <!-- <+func.popup_get_folder+> -->
