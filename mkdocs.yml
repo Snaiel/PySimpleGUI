@@ -3,4 +3,5 @@ theme:
     name: mkdocs
     custom_dir: docs_modification/
 plugins:
-  - search
+  - search:
+      prebuild_index: true
